@@ -15,6 +15,7 @@ int main() {
     uint16_t keyevent = key_pop();
     if (keyevent & 0x100) {
         char key = keyevent & 0xFF;
+        
     }
     for (;;) {
 

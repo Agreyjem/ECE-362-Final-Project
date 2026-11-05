@@ -37,3 +37,32 @@ p_a_win= 1/(1+exp(-k(ts_a-ts_b)))
 type of ko generally: 55% spinout (sta sta), 28% KO (atk def), 17% burst (atk bur)
 assuming A win:
 a_ko_win=p_ko*exp(0.05(atk_a-def_b))
+... for burst and spinout
+
+win% formula: https://en.wikipedia.org/wiki/Elo_rating_system
+blades: https://worldbeyblade.org/Thread-Top-10-Meta-Blades-May-2026
+other parts: https://beywatch.gg/parts
+
+COST CAP: 100
+
+STATS IN ORDER OF: ATK DEF STA BUR SS COST
+Blades: 
+    Wizard Rod:     20 80 95 70 10 55
+    Shark Scale:    90 30 40 65  5 50
+    Phoenix Wing:   65 55 60 60 10 40
+    Cobalt Dragon:  80 35 50 55 20 45
+    Hover Wyvern:   55 50 70 60 10 35
+
+Disc/Ratchets:
+    Heavy (A):      20 85 70 50  0 30
+    Knuckle (A):    75 40 35 55  0 25
+    Spread (A):     30 60 65 45  0 20
+    3-60 Ratchet:   45 50 55 60  0 25
+    9-60 Ratchet:   30 60 70 75  0 30
+
+Tips:
+    Hexa:           15 85 90 70  5 45
+    Low Rush:       90 25 30 50  0 40
+    Ball:           10 60 95 55  5 30
+    Elevate:        65 50 65 55 10 35
+    Rush:           80 30 35 50  0 30
