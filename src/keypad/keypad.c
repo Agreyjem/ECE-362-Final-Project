@@ -28,12 +28,15 @@ void keypad_isr();
 // replace timer_hw with timer0_hw
 
 void keypad_init_pins() {
+    printf("gothere!\n");
     gpio_init_mask(0b11111111<<2);
     // gpio_set_dir_in_masked(0b1111<<2);
     sio_hw->gpio_oe_clr = 0b1111<<2;
     // gpio_set_dir_out_masked(0b1111<<6);
     sio_hw->gpio_oe_set = 0b1111<<6;
     sio_hw->gpio_clr = 0b1111<<6; // set out to 0, do we need this ?
+    sleep_ms(1000);
+    printf("gothere\n");
 }
 
 // TIMER0 and TIMER1 1 tick per µs
@@ -48,6 +51,8 @@ void keypad_init_timer() {
     timer0_hw->alarm[0] = (uint32_t) timer0_hw->timerawl + 100000;
     timer0_hw->alarm[1] = (uint32_t) timer0_hw->timerawl + 101000;
     // do we need intr here?
+    sleep_ms(1000);
+    printf("Going there\n");
 }
 
 void keypad_drive_column() {
