@@ -5,7 +5,7 @@
 #include "queue.h"
 #include "parts.h"
 #include "header.h"
-
+#include "lcd.h"
 
 BeybladeConfig configbeyblade() {
     keypad_init_pins();
@@ -19,6 +19,7 @@ BeybladeConfig configbeyblade() {
     BeybladeConfig player_bey = { sel_blade, sel_disc, sel_tip };
 	int saved = 0;
 
+	// LCD_DrawString(90,150, CYAN, BLACK, MENU_START, 16, 1);
 	printf(MENU_START);
     
     // for (;;) {
@@ -37,7 +38,7 @@ BeybladeConfig configbeyblade() {
 
 			// 0: starting screen
 			case 0:
-				printf(MENU_BLADE);
+				LCD_DrawString(90,150, CYAN, BLACK, MENU_BLADE, 16, 1);
 				state = 1;
 				break;
 
@@ -46,7 +47,7 @@ BeybladeConfig configbeyblade() {
 				if (key >= '1' && key <= '5') {
 					sel_blade = key - '1';
 				} else if (key == '#' && sel_blade >= 0) {
-					printf(MENU_DISC);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_DISC, 16, 1);
 					state = 2;
 				}
 				break;
@@ -56,7 +57,7 @@ BeybladeConfig configbeyblade() {
 				if (key >= '1' && key <= '5') {
 					sel_disc = key - '1';
 				} else if (key == '#' && sel_disc >= 0) {
-					printf(MENU_TIP);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_TIP, 16, 1);
 					state = 3;
 				}
 				break;
@@ -66,7 +67,7 @@ BeybladeConfig configbeyblade() {
 				if (key >= '1' && key <= '5') {
 					sel_tip = key - '1';
 				} else if (key == '#' && sel_tip >= 0) {
-					printf(MENU_CONFIRM);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_CONFIRM, 16, 1);
 					state = 4;
                     firstsel = 1;
 				}
@@ -80,11 +81,11 @@ BeybladeConfig configbeyblade() {
 						+ tips[sel_tip].cost;
 
 					if (total <= COST_CAP) {
-						printf("Saved beyblade: %s + %s + %s (cost %d).\n",
+                        LCD_DrawString(90,150, CYAN, BLACK, ("Saved beyblade: %s + %s + %s (cost %d).\n",
 								blades[sel_blade].name,
 								discs[sel_disc].name,
 								tips[sel_tip].name,
-								total);
+								total), 16, 1);
 
 						player_bey.blade = sel_blade;
 						player_bey.disc = sel_disc;
@@ -93,19 +94,19 @@ BeybladeConfig configbeyblade() {
 						break; // leave switch
 					} else {
                     // cost cap exceeded
-						printf("Error: cost %d > %d. "
+                        LCD_DrawString(90,150, CYAN, BLACK, ("Error: cost %d > %d. "
 								"Confirm: # to confirm, 1=change blade, "
 								"2=change disc, 3=change tip.\n",
-								total, COST_CAP);
+								total, COST_CAP), 16, 1);
 					}
 				} else if (key == '1') {
-					printf(MENU_BLADE);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_BLADE, 16, 1);
 					state = 1;
 				} else if (key == '2') {
-					printf(MENU_DISC);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_TIP, 16, 1);
 					state = 2;
 				} else if (key == '3') {
-					printf(MENU_TIP);
+					LCD_DrawString(90,150, CYAN, BLACK, MENU_CONFIRM, 16, 1);
 					state = 3;
 				}
 				break;
