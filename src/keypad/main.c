@@ -21,15 +21,15 @@ BeybladeConfig player_bey = { -1, -1, -1 };
 #define COST_CAP 100
 
 // one string per menu
-#define MENU_START   "BEYBLADE BUILDER - press any button to start.\n"
+#define MENU_START "BEYBLADE BUILDER - press any button to start.\n"
 
-#define MENU_BLADE   "Pick a blade: 1=Wizard Rod 2=Shark Scale 3=Phoenix Wing " \
+#define MENU_BLADE "Pick a blade: 1=Wizard Rod 2=Shark Scale 3=Phoenix Wing " \
 	"4=Cobalt Dragon 5=Hover Wyvern. # to confirm.\n"
 
-#define MENU_DISC    "Pick a disc/ratchet: 1=Heavy 2=Knuckle 3=Spread " \
+#define MENU_DISC "Pick a disc/ratchet: 1=Heavy 2=Knuckle 3=Spread " \
 	"4=3-60 5=9-60. # to confirm.\n"
 
-#define MENU_TIP     "Pick a tip: 1=Hexa 2=Low Rush 3=Ball 4=Elevate " \
+#define MENU_TIP "Pick a tip: 1=Hexa 2=Low Rush 3=Ball 4=Elevate " \
 	"5=Rush. # to confirm.\n"
 
 #define MENU_CONFIRM "Confirm: # to confirm, 1=change blade, 2=change disc, " \
@@ -48,7 +48,7 @@ int main() {
 	printf(MENU_START);
 
 	for (;;) {
-        printf("hi");
+        // printf("hi");
 		uint16_t keyevent = key_pop();
 
 		// ignore empty queue and release events
@@ -136,6 +136,7 @@ int main() {
 	}
 
 	for (;;) {
+        // printf("bye");
 		// battle loop goes here
 	}
 }

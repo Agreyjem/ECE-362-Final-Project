@@ -5,5 +5,7 @@
 #include "hardware/pwm.h"
 
 int main() {
-    for(;;);
+    for(;;) {
+        printf("this shouldnt be running");
+    }
 }
