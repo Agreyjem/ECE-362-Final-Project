@@ -1,4 +1,4 @@
-
+#include "pico/stdlib.h"
 #define N_BODIES   2      // Number of bodies in the simulation
 #define G          12.0f  // Gravitational constant
 #define DT         0.01f // Simulation time step
@@ -18,9 +18,9 @@
 #define THRESH 500
 
 typedef struct {
-        float x, y, vx, vy, mass, radius, restitution;
-        uint16_t outcolor, incolor;
-    } Body;
+    float x, y, vx, vy, mass, radius, restitution;
+    uint16_t outcolor, incolor;
+} Body;
 
 typedef struct {
 	int blade;
