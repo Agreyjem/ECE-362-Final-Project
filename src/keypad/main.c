@@ -4,47 +4,12 @@
 #include "pico/stdlib.h"
 #include "queue.h"
 #include "parts.h"
+#include "header.h"
 
 void keypad_init_pins();
 void keypad_init_timer();
+BeybladeConfig configbeyblade();
 extern KeyEvents kev;
-
-// saved configuration
-typedef struct {
-	int blade;
-	int disc;
-	int tip;
-} BeybladeConfig;
-
-
-#define COST_CAP 100
-
-// one string per menu
-#define MENU_START "BEYBLADE BUILDER - press any button to start.\n"
-
-#define MENU_BLADE "Pick a blade:   \n 1. Wizard Rod\
-                                    \n 2. Shark Scale\
-                                    \n 3. Phoenix Wing\
-                                    \n 4. Cobalt Dragon\
-                                    \n 5. Hover Wyvern\
-                                    \n # to confirm.\n"
-
-#define MENU_DISC "Pick a disc/ratchet: \n 1. Heavy\
-                                        \n 2. Knuckle(A)\
-                                        \n 3. Spread\
-                                        \n 4. 3-60\
-                                        \n 5. 9-60\
-                                        \n # to confirm.\n"
-
-#define MENU_TIP "Pick a tip:   \n 1. Hexa\
-                                \n 2. Low Rush\
-                                \n 3. Ball\
-                                \n 4. Elevate\
-                                \n 5. Rush\
-                                \n # to confirm.\n"
-
-#define MENU_CONFIRM "Confirm: # to confirm, 1=change blade, 2=change disc, " \
-"3=change tip.\n"
 
 BeybladeConfig configbeyblade() {
     keypad_init_pins();

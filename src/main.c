@@ -117,7 +117,7 @@ typedef struct {
 	int tip;
 } BeybladeConfig;
 
-BeybladeConfig getConfig();
+BeybladeConfig configbeyblade();
 Body calcStats(BeybladeConfig config);
 int determineWinner(Body p1, Body p2);
 void sendData(p1, p2, winner);
@@ -167,7 +167,7 @@ int main() {
     if (mode == START)
     {
         LCD_Clear(BLACK);
-        LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);
+        LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);;
     }
 
     if (mode == CHOOSE)
@@ -185,8 +185,8 @@ int main() {
             LCD_DrawString(0, i, WHITE, BLACK, "-----------------------------", 16, 1);
         }
 
-        // BeybladeConfig p1_config = getConfig();
-        // BeybladeConfig p2_config = getConfig();
+        // BeybladeConfig p1_config = configbeyblade();
+        // BeybladeConfig p2_config = configbeyblade();
         // Body p1 = calcStats(p1_config);
         // Body p2 = calcStats(p2_config);
         // winner = determineWinner(p1, p2);
