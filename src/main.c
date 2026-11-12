@@ -1,0 +1,336 @@
+#include "pico/stdlib.h"
+#include "hardware/spi.h"
+#include "lcd.h"
+#include <stdio.h>
+#include <string.h>
+#include <math.h>   
+
+/****************************************** */
+#define PIN_SDI    15
+#define PIN_CS     13
+#define PIN_SCK    14
+#define PIN_DC     17
+#define PIN_nRESET 16
+#define THRESH 500
+
+// Uncomment the following #define when 
+// you are ready to run Step 3.
+
+// WARNING: The process will take a VERY 
+// long time as it compiles and uploads 
+// all the image frames into the uploaded 
+// binary!  Expect to wait 5 minutes.
+// #define ANIMATION
+
+/****************************************** */
+#ifdef ANIMATION
+#include "images.h"
+#endif
+/****************************************** */
+
+void init_spi_lcd() {
+    gpio_set_function(PIN_CS, GPIO_FUNC_SIO);
+    gpio_set_function(PIN_DC, GPIO_FUNC_SIO);
+    gpio_set_function(PIN_nRESET, GPIO_FUNC_SIO);
+
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_set_dir(PIN_DC, GPIO_OUT);
+    gpio_set_dir(PIN_nRESET, GPIO_OUT);
+
+    gpio_put(PIN_CS, 1); // CS high
+    gpio_put(PIN_DC, 0); // DC low
+    gpio_put(PIN_nRESET, 1); // nRESET high
+
+    // initialize SPI1 with 48 MHz clock
+    gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_SDI, GPIO_FUNC_SPI);
+    spi_init(spi1, 100 * 1000 * 1000);
+    spi_set_format(spi1, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+}
+
+Picture* load_image(const char* image_data);
+void free_image(Picture* pic);
+enum Mode {START, CHOOSE, BATTLE, END};
+
+// Make things easier to keep track of for each "body".
+    typedef struct {
+        float x, y, vx, vy, mass, radius, restitution;
+        uint16_t outcolor, incolor;
+    } Body;
+
+int handle_collision(Body *a, Body *b) {
+    float dx = b->x - a->x;
+    float dy = b->y - a->y;
+
+    float distance = sqrtf(dx * dx + dy * dy);
+    float min_distance = a->radius + b->radius;
+
+    if (distance >= min_distance || distance == 0.0f)
+        return 0;
+
+    // Collision normal
+    float nx = dx / distance;
+    float ny = dy / distance;
+
+    // Relative velocity
+    float rvx = b->vx - a->vx;
+    float rvy = b->vy - a->vy;
+
+    // Relative velocity along collision normal
+    float vel_normal = rvx * nx + rvy * ny;
+
+    // Ignore if bodies are already separating
+    if (vel_normal > 0)
+        return 0;
+
+    // Coefficient of restitution
+    float e = fminf(a->restitution, b->restitution);
+
+    // Calculate impulse
+    float impulse = -(1.0f + e) * vel_normal /
+                    (1.0f/a->mass + 1.0f/b->mass);
+
+    // Update velocities
+    a->vx -= impulse * nx / a->mass;
+    a->vy -= impulse * ny / a->mass;
+
+    b->vx += impulse * nx / b->mass;
+    b->vy += impulse * ny / b->mass;
+
+    // Correct overlapping positions
+    float overlap = min_distance - distance;
+    float total_mass = a->mass + b->mass;
+
+    a->x -= nx * overlap * (b->mass / total_mass);
+    a->y -= ny * overlap * (b->mass / total_mass);
+
+    b->x += nx * overlap * (a->mass / total_mass);
+    b->y += ny * overlap * (a->mass / total_mass);
+
+    return 1;
+
+}
+
+typedef struct {
+	int blade;
+	int disc;
+	int tip;
+} BeybladeConfig;
+
+BeybladeConfig getConfig();
+Body calcStats(BeybladeConfig config);
+int determineWinner(Body p1, Body p2);
+void sendData(p1, p2, winner);
+
+
+// *************************************************//
+
+int main() {
+    stdio_init_all();
+
+    init_spi_lcd();
+
+    LCD_Setup();
+    LCD_Clear(0x0000); // Clear the screen to black
+
+    #ifndef ANIMATION
+    #define N_BODIES   2      // Number of bodies in the simulation
+    #define G          12.0f  // Gravitational constant
+    #define DT         0.01f // Simulation time step
+    #define SOFTENING  5.0f   // Prevents extreme forces at close range
+
+    // Colors as per the 16-bit RGB565 specification.
+    #define BLACK      0x0000
+    #define RED        0xF800
+    #define LIME       0x07E0   // brighter green
+    #define BLUE       0x001F
+
+    // Clear everything so we start from scratch
+    LCD_Clear(BLACK);
+
+    double b1_starting_vel, b2_starting_vel;
+    double b1_angle, b2_angle;
+    int time = 0;
+    int winner = 0;
+
+    // Initialize all bodies in a compact list
+    Body bodies[N_BODIES] = {
+        { .x=120.0f, .y=100.0f, .vx= 1.2f, .vy= 0.5f, .mass=20.0f, .radius = 10, .restitution = 1, .outcolor=RED, .incolor = BLUE  },
+        { .x=180.0f, .y=250.0f, .vx=-0.8f, .vy=-1.0f, .mass=25.0f, .radius = 10, .restitution = 1, .outcolor=LIME, .incolor = RED }
+        // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
+    };
+
+    int mode = BATTLE;
+
+    // Infinite Animation Loop
+
+    if (mode == START)
+    {
+        LCD_Clear(BLACK);
+        LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);
+    }
+
+    if (mode == CHOOSE)
+    {
+        LCD_Clear(BLACK);
+        LCD_DrawString(80,10, CYAN, BLACK, "Blade Specs", 16, 1);
+
+        for (int i = 70; i < 300; i = i + 20)
+        {
+            LCD_DrawChar(120, i, WHITE, BLACK, '|', 16, 1);
+        }
+
+        for (int i = 60; i < 300; i = i + 60)
+        {
+            LCD_DrawString(0, i, WHITE, BLACK, "-----------------------------", 16, 1);
+        }
+
+        // BeybladeConfig p1_config = getConfig();
+        // BeybladeConfig p2_config = getConfig();
+        // Body p1 = calcStats(p1_config);
+        // Body p2 = calcStats(p2_config);
+        // winner = determineWinner(p1, p2);
+        // sendData(p1, p2, winner);
+        // mode = BATTLE;
+    }
+
+    while(mode == BATTLE) {
+            // Calculate accelerations and update velocities
+            for (int i = 0; i < N_BODIES; i++) {
+                // float total_accel_x = 0.0f;
+                // float total_accel_y = 0.0f;
+
+                // for (int j = 0; j < N_BODIES; j++) {
+                //     if (i == j) continue;
+
+                //     float dx = bodies[j].x - bodies[i].x;
+                //     float dy = bodies[j].y - bodies[i].y;
+                //     // d^2 = dx^2 + dy^2 (+ a fake softening factor to avoid collisions)
+                //     float dist_sq = dx * dx + dy * dy + SOFTENING;
+                //     // Newton's law of gravitation: F = G * m1 * m2 / d^2
+                //     float inv_dist_cubed = 1.0f / (dist_sq * sqrtf(dist_sq));
+                    
+                //     // Acceleration = Force / mass, but we multiply by mass to get the force directly
+                //     // so we can use it to update velocity directly.
+                //     total_accel_x += dx * inv_dist_cubed * bodies[j].mass * G;
+                //     total_accel_y += dy * inv_dist_cubed * bodies[j].mass * G;
+                // }
+                // bodies[i].vx += total_accel_x * DT * 100;
+                // bodies[i].vy += total_accel_y * DT * 100;
+
+                for (int j = i + 1; j < N_BODIES; j++) {
+                        if (handle_collision(&bodies[i], &bodies[j])) LCD_Clear(BLACK);
+                }
+            }
+
+            for (int i = 0; i < N_BODIES; i++) {
+            // Apply boundary collision calculations here
+                if (bodies[i].x - bodies[i].radius < 0) {
+                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                    bodies[i].x = bodies[i].radius;
+                    bodies[i].vx = fabsf(bodies[i].vx) * bodies[i].restitution;
+                }
+
+                if (bodies[i].x + bodies[i].radius >= 240) {
+                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                    bodies[i].x = 240 - bodies[i].radius;
+                    bodies[i].vx = -fabsf(bodies[i].vx) * bodies[i].restitution;
+                }
+
+                if (bodies[i].y - bodies[i].radius < 0) {
+                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                    bodies[i].y = bodies[i].radius;
+                    bodies[i].vy = fabsf(bodies[i].vy) * bodies[i].restitution;
+                }
+
+                if (bodies[i].y + bodies[i].radius >= 320) {
+                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                    bodies[i].y = 320 - bodies[i].radius;
+                    bodies[i].vy = -fabsf(bodies[i].vx) * bodies[i].restitution;
+                }
+            }
+            // Update positions and draw each body
+            for (int i = 0; i < N_BODIES; i++) {
+                int old_x = (int)bodies[i].x;
+                int old_y = (int)bodies[i].y;
+                // new position = old position + velocity * time step
+                bodies[i].x += bodies[i].vx * DT * 350;
+                bodies[i].y += bodies[i].vy * DT * 350;
+
+                // Wrap around screen edges
+                // if (bodies[i].x < 0)    bodies[i].x += 240;
+                // if (bodies[i].x >= 240) bodies[i].x -= 240;
+                // if (bodies[i].y < 0)    bodies[i].y += 320;
+                // if (bodies[i].y >= 320) bodies[i].y -= 320;
+
+                // LCD_DrawPoint(old_x, old_y, BLACK);
+                // LCD_DrawPoint((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].color);
+                LCD_Circle(old_x, old_y, bodies[i].radius, 0, BLACK);
+                LCD_Circle(old_x, old_y, 5, 0, BLACK);
+                LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].radius, 0, bodies[i].outcolor);
+                LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, 5, 0, bodies[i].incolor);
+            }
+
+            // Slow it WAY down so we can see the planets interact with each other!
+            // sleep_us(0.1);
+            time++;
+            if (time > THRESH) {mode = END;}
+    }
+
+    if (mode == END)
+    {
+        LCD_Clear(BLACK);
+        LCD_DrawString(90,150, CYAN, BLACK, "Winner: ", 16, 1);
+    }
+
+    #endif
+    
+    /*
+        Now, for some more fun!
+
+        Uncomment the ANIMATION #define at the top of main.c 
+        to run this section.
+        
+        We've converted a popular GIF into a series of images, 
+        and stored each of those frames in its own C array.  
+        Look at the lab for the script we wrote to do this.
+
+        This is an example of how you can draw a very large picture, 
+        but notice how slow the animation is, even at 100 MHz.  
+        The LCD_DrawPicture function is not really intended for such 
+        large images, but it will be very helpful for smaller ones, 
+        like scary monsters and nice sprites in a game.
+    */ 
+
+    #ifdef ANIMATION
+    Picture* frame_pic = NULL;
+    int frame_index = 0;
+    while (1) { // Loop forever
+        // Get the next frame from the array
+        frame_pic = load_image(mystery_frames[frame_index]);
+    
+        if (frame_pic) {
+            // Draw the frame to the top-left corner of the screen
+            LCD_DrawPicture(0, 0, frame_pic);
+            
+            // Free the Picture struct (not the pixel data)
+            free_image(frame_pic);
+        }
+    
+        // Move to the next frame, looping back to the start
+        frame_index++;
+        if (frame_index >= mystery_frame_count) {
+            frame_index = 0;
+        }
+    
+        // Add a small delay to control animation speed
+        sleep_ms(1); // Adjust delay as needed
+    }
+    #endif
+
+    for(;;);
+}
