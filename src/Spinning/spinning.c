@@ -23,7 +23,6 @@ void getUserchoices(int bladeChoiceLead,  int discChoiceLead, int tipChoiceLead,
     discLead = discs[discChoiceLead];
     tipCLead = tips[tipChoiceLead];
 
-
     //from follower 
     bladeFollow = blades[bladeChoiceFollow];
     discFollow = discs[discChoiceFollow];
@@ -36,7 +35,7 @@ float calculateIntermediateScore(Part leadPart, Part followPart, float angleLead
     int K = (rand() % 9) + 1;
 
     //need to implement the speed and angle normalizations and scoring here 
-    
+
     //formulas from read me 
     float leadScore = 25*leadPart.atk + .2*leadPart.def + .3*leadPart.sta + .15*leadPart.bur;
     float followScore = 25*followPart.atk + .2*followPart.def + .3*followPart.sta + .15*followPart.bur;

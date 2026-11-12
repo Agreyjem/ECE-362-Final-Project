@@ -9,8 +9,6 @@
 static volatile uint8_t rxbuf[RXBUF_SIZE];
 static volatile uint8_t rx_head = 0;   
 static volatile uint8_t rx_tail = 0;  
-
-void uart_rx_handler(void);
 // Initializes the UART with the specified baud rate and configures the GPIO pins for UART functionality.
 void init_uart(void) {
     gpio_set_function(0, UART_FUNCSEL_NUM(uart0, 0));
@@ -59,13 +57,13 @@ bool uart_rx_pop(uint8_t *c) {
 //         char key = keypad_get_key();
 //         if (key != 0 && key != last_key) {
 //             uart_putc_raw(uart0, key);
-    //             send the key over UART
+//                 // send the key over UART
 //         }
 //         last_key = key;
 
 //         uint8_t rx;
 //         while (uart_rx_pop(&rx)) {
-            // recieved character is now in rx do smth with it
+//             // recieved character is now in rx do smth with it
 //         }
 
 //         char win = determineWinner();
