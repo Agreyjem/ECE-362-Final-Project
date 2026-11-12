@@ -16,7 +16,6 @@ typedef struct {
 	int tip;
 } BeybladeConfig;
 
-BeybladeConfig player_bey = { -1, -1, -1 };
 
 #define COST_CAP 100
 
@@ -24,31 +23,36 @@ BeybladeConfig player_bey = { -1, -1, -1 };
 #define MENU_START "BEYBLADE BUILDER - press any button to start.\n"
 
 #define MENU_BLADE "Pick a blade: 1=Wizard Rod 2=Shark Scale 3=Phoenix Wing " \
-	"4=Cobalt Dragon 5=Hover Wyvern. # to confirm.\n"
+"4=Cobalt Dragon 5=Hover Wyvern. # to confirm.\n"
 
-#define MENU_DISC "Pick a disc/ratchet: 1=Heavy 2=Knuckle 3=Spread " \
-	"4=3-60 5=9-60. # to confirm.\n"
+#define MENU_DISC "Pick a disc/ratchet: 1=Heavy 2=Knuckle(A) 3=Spread " \
+"4=3-60 5=9-60. # to confirm.\n"
 
 #define MENU_TIP "Pick a tip: 1=Hexa 2=Low Rush 3=Ball 4=Elevate " \
-	"5=Rush. # to confirm.\n"
+"5=Rush. # to confirm.\n"
 
 #define MENU_CONFIRM "Confirm: # to confirm, 1=change blade, 2=change disc, " \
-	"3=change tip.\n"
+"3=change tip.\n"
 
-int main() {
-	keypad_init_pins();
+BeybladeConfig setKeypad() {
+    keypad_init_pins();
 	keypad_init_timer();
-
+    
 	int state = 0; // 0=start 1=blade 2=disc 3=tip 4=confirm
 	int sel_blade = -1;
 	int sel_disc = -1;
 	int sel_tip = -1;
+    BeybladeConfig player_bey = { sel_blade, sel_disc, sel_tip };
 	int saved = 0;
 
 	printf(MENU_START);
+    
+    // for (;;) {
+    //     printf(MENU_START);
+    //     sleep_ms(1000);
+    // }
 
 	for (;;) {
-        // printf("hi");
 		uint16_t keyevent = key_pop();
 
 		// ignore empty queue and release events
@@ -132,11 +136,19 @@ int main() {
 				break;
 		}
 
-		if (saved) break; // leave selection loop once saved
+		if (saved) return player_bey ; // leave selection loop once saved
 	}
+}
+
+
+int main() {
+    
+    stdio_init_all();
+    setKeypad();
 
 	for (;;) {
-        // printf("bye");
+        // printf("Hello, world!\n");
+        // sleep_ms(1000);
 		// battle loop goes here
 	}
 }
