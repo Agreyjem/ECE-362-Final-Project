@@ -5,7 +5,7 @@
 
 
 #define RXBUF_SIZE 16
-
+void uart_rx_handler(void);
 static volatile uint8_t rxbuf[RXBUF_SIZE];
 static volatile uint8_t rx_head = 0;   
 static volatile uint8_t rx_tail = 0;  
