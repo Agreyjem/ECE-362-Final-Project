@@ -22,23 +22,36 @@ typedef struct {
 // one string per menu
 #define MENU_START "BEYBLADE BUILDER - press any button to start.\n"
 
-#define MENU_BLADE "Pick a blade: 1=Wizard Rod 2=Shark Scale 3=Phoenix Wing " \
-"4=Cobalt Dragon 5=Hover Wyvern. # to confirm.\n"
+#define MENU_BLADE "Pick a blade:   \n 1. Wizard Rod\
+                                    \n 2. Shark Scale\
+                                    \n 3. Phoenix Wing\
+                                    \n 4. Cobalt Dragon\
+                                    \n 5. Hover Wyvern\
+                                    \n # to confirm.\n"
 
-#define MENU_DISC "Pick a disc/ratchet: 1=Heavy 2=Knuckle(A) 3=Spread " \
-"4=3-60 5=9-60. # to confirm.\n"
+#define MENU_DISC "Pick a disc/ratchet: \n 1. Heavy\
+                                        \n 2. Knuckle(A)\
+                                        \n 3. Spread\
+                                        \n 4. 3-60\
+                                        \n 5. 9-60\
+                                        \n # to confirm.\n"
 
-#define MENU_TIP "Pick a tip: 1=Hexa 2=Low Rush 3=Ball 4=Elevate " \
-"5=Rush. # to confirm.\n"
+#define MENU_TIP "Pick a tip:   \n 1. Hexa\
+                                \n 2. Low Rush\
+                                \n 3. Ball\
+                                \n 4. Elevate\
+                                \n 5. Rush\
+                                \n # to confirm.\n"
 
 #define MENU_CONFIRM "Confirm: # to confirm, 1=change blade, 2=change disc, " \
 "3=change tip.\n"
 
-BeybladeConfig setKeypad() {
+BeybladeConfig configbeyblade() {
     keypad_init_pins();
 	keypad_init_timer();
     
 	int state = 0; // 0=start 1=blade 2=disc 3=tip 4=confirm
+    int firstsel = 0;
 	int sel_blade = -1;
 	int sel_disc = -1;
 	int sel_tip = -1;
@@ -94,6 +107,7 @@ BeybladeConfig setKeypad() {
 				} else if (key == '#' && sel_tip >= 0) {
 					printf(MENU_CONFIRM);
 					state = 4;
+                    firstsel = 1;
 				}
 				break;
 
@@ -144,7 +158,7 @@ BeybladeConfig setKeypad() {
 int main() {
     
     stdio_init_all();
-    setKeypad();
+    configbeyblade();
 
 	for (;;) {
         // printf("Hello, world!\n");
