@@ -4,6 +4,7 @@
 #include "queue.h"
 #include <time.h>
 #include "parts.h"
+#include "header.h"
 
 // define user choices
 Part bladeLead;
@@ -49,8 +50,8 @@ float calculateIntermediateScore(Part leadPart, Part followPart, float angleLead
     return percentWin;
 }
 
-int determineWinner(float angleLead, float speedLead, float angleFollow, float speedFollow, int bladeChoiceLead, int discChoiceLead, int tipChoiceLead, int bladeChoiceFollow, int discChoiceFollow, int tipChoiceFollow) {
-    getUserchoices(bladeChoiceLead, discChoiceLead, tipChoiceLead, bladeChoiceFollow, discChoiceFollow, tipChoiceFollow);
+int determineWinner(float angleLead, float speedLead, float angleFollow, float speedFollow, BeybladeConfig leadConfig, BeybladeConfig followConfig) {
+    getUserchoices(leadConfig.blade, leadConfig.disc, leadConfig.tip, followConfig.blade, followConfig.disc, followConfig.tip);
 
     //calcualte winner of each part battle 
     float bladeWin = calculateIntermediateScore(bladeLead, bladeFollow, angleLead, angleFollow, speedLead, speedFollow);
