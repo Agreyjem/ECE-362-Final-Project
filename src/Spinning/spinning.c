@@ -3,59 +3,67 @@
 #include <stdio.h>
 #include "queue.h"
 #include <time.h>
-
-// define the weights for each of the options
-const float bladeWeight[3] = {.8, .3, .6};
-const float coreWeight[3] = {.6, .7, .4};
-const float discWeight[3] = {.2, .5, .9};
-const float tipWeight[3] = {.5, .4, .6};
-
-//define the base score fore each catagory
-const int baseScore[4] = {13, 15, 12, 14};
+#include "parts.h"
 
 // define user choices
-float bladeChoiceLead;
-float coreChoiceLead;
-float discChoiceLead;
-float tipChoiceLead;
+Part bladeLead;
+Part discLead;
+Part tipCLead;
 
-float bladeChoiceFollow;
-float coreChoiceFollow;
-float discChoiceFollow;
-float tipChoiceFollow;
+
+Part bladeFollow;
+Part discFollow;
+Part tipFollow;
+
 
 // get the user choices from each keypad entry
-
-
-void getUserchoices(int bladeChoiceLead, int coreChoiceLead, int discChoiceLead, int tipChoiceLead, int bladeChoiceFollow, int coreChoiceFollow, int discChoiceFollow, int tipChoiceFollow) {
+void getUserchoices(int bladeChoiceLead,  int discChoiceLead, int tipChoiceLead, int bladeChoiceFollow, int discChoiceFollow, int tipChoiceFollow) {
     //from leader
-    bladeChoiceLead = bladeWeight[bladeChoiceLead];
-    coreChoiceLead = coreWeight[coreChoiceLead];
-    discChoiceLead = discWeight[discChoiceLead];
-    tipChoiceLead = tipWeight[tipChoiceLead];
+    bladeLead = blades[bladeChoiceLead];
+    discLead = discs[discChoiceLead];
+    tipCLead = tips[tipChoiceLead];
+
 
     //from follower 
-    bladeChoiceFollow = bladeWeight[bladeChoiceFollow];
-    coreChoiceFollow = coreWeight[coreChoiceFollow];
-    discChoiceFollow = discWeight[discChoiceFollow];
-    tipChoiceFollow = tipWeight[tipChoiceFollow];
+    bladeFollow = blades[bladeChoiceFollow];
+    discFollow = discs[discChoiceFollow];
+    tipFollow = tips[tipChoiceFollow];
 }
 
-int calculateIntermediateScore(float bladeChoice, float coreChoice, float discChoice, float tipChoice) {
-    int score = baseScore[0] * bladeChoice + baseScore[1] * coreChoice + baseScore[2] * discChoice + baseScore[3] * tipChoice;
-    return score;
-}
-
-int determineWinner(){
+//calculate scores 
+float calculateIntermediateScore(Part leadPart, Part followPart, float angleLead, float angleFollow, float speedLead, float speedFollow) {
     srand(time(NULL));
-    int leadRand = (rand() % 9) + 1;
-    int followRand = (rand() % 9) + 1;
-    int leaderScore = leadRand * calculateIntermediateScore(bladeChoiceLead, coreChoiceLead, discChoiceLead, tipChoiceLead);
-    int followerScore = followRand * calculateIntermediateScore(bladeChoiceFollow, coreChoiceFollow, discChoiceFollow, tipChoiceFollow);
+    int K = (rand() % 9) + 1;
 
-    if (leaderScore > followerScore) {
+    //need to implement the speed and angle normalizations and scoring here 
+    
+    //formulas from read me 
+    float leadScore = 25*leadPart.atk + .2*leadPart.def + .3*leadPart.sta + .15*leadPart.bur;
+    float followScore = 25*followPart.atk + .2*followPart.def + .3*followPart.sta + .15*followPart.bur;
+    if(speedLead > speedFollow) {
+        float leadScore = leadScore +.15*leadPart.ss;
+    } else if (speedFollow > speedLead) {
+        float followScore = followScore +.15*followPart.ss;
+    }
+
+    float percentWin = 1/ (1 + exp(-K * (leadScore - followScore)));
+    return percentWin;
+}
+
+int determineWinner(float angleLead, float speedLead, float angleFollow, float speedFollow, int bladeChoiceLead, int discChoiceLead, int tipChoiceLead, int bladeChoiceFollow, int discChoiceFollow, int tipChoiceFollow) {
+    getUserchoices(bladeChoiceLead, discChoiceLead, tipChoiceLead, bladeChoiceFollow, discChoiceFollow, tipChoiceFollow);
+
+    //calcualte winner of each part battle 
+    float bladeWin = calculateIntermediateScore(bladeLead, bladeFollow, angleLead, angleFollow, speedLead, speedFollow);
+    float discWin  = calculateIntermediateScore(discLead, discFollow, angleLead, angleFollow, speedLead, speedFollow);
+    float tipWin   = calculateIntermediateScore(tipCLead, tipFollow, angleLead, angleFollow, speedLead, speedFollow);
+    //combine the results and dvide by 3 to get overall winner
+    float totalWin = (bladeWin + discWin + tipWin) / 3;
+
+    //need to add a check for an immediate ko 
+    if (totalWin > 0.5) {
         return 1; // Leader wins
-    } else if (followerScore > leaderScore) {
+    } else if (totalWin < 0.5) {
         return 2; // Follower wins
     } else {
         return 0; // Tie
