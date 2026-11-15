@@ -160,12 +160,15 @@ int main() {
         // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
     };
 
-    int mode = CHOOSE;
+    int mode = START;
 
     // Infinite Animation Loop
 
     if (mode == START)
     {
+        sound_init();
+        play_start();
+        sound_wait();
         LCD_Clear(BLACK);
         LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);;
     }
