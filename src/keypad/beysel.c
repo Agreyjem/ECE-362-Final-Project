@@ -16,6 +16,9 @@ static char statbuf[7][24];
 static const char* labels[8];
 static int state; // 0=start 1=blade menu 2=disc menu 3=tip menu 4=summary 5=blade stats 6=disc stats 7=tip stats
 
+void keypad_init_pins();
+void keypad_init_timer();
+
 static void draw_centered(int cell_x, int cell_y, int cell_w, int cell_h, uint16_t fg, uint16_t bg, const char *s) {
 	int tw = (int)strlen(s) * 8;   // 8px per char at size 16
 	int x = cell_x + (cell_w - tw) / 2;

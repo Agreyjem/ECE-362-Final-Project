@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>   
-#include "uartcustom.h"
-#include "header.h"
+#include "uartcustom.h" // uartcustom includes header 
+#include "spinning.h"
 
 /****************************************** */
 #define PIN_SDI    15
@@ -55,11 +55,6 @@ void free_image(Picture* pic);
 
 
 // Make things easier to keep track of for each "body".
-    typedef struct {
-        float x, y, vx, vy, mass, radius, restitution;
-        uint16_t outcolor, incolor;
-    } Body;
-
 int handle_collision(Body *a, Body *b) {
     float dx = b->x - a->x;
     float dy = b->y - a->y;
@@ -112,12 +107,6 @@ int handle_collision(Body *a, Body *b) {
     return 1;
 
 }
-
-typedef struct {
-	int blade;
-	int disc;
-	int tip;
-} BeybladeConfig;
 
 BeybladeConfig configbeyblade(void);
 // Body calcStats(BeybladeConfig config);
@@ -220,7 +209,7 @@ int main() {
         // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
     };
     for(;;){
-    #if IS_MASTER
+    #if !IS_MASTER
         handle_incoming_as_slave();
     #endif
 
