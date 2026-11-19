@@ -377,7 +377,6 @@ int main() {
             if (!send_reliable(CMD_WINNER, &winner, 1)) {
                 break;
             }
-            display_winner(winner);
             sleep_ms(3000);                  // or wait for a restart button
             mode = START;               // HELLO pulls the slave back to Choose
         }
