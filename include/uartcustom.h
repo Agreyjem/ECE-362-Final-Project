@@ -10,14 +10,6 @@
 
 typedef enum { START, CHOOSE, BATTLE, END } mode_t_;
 
-// If BeybladeConfig is already defined in your own header, delete this and include yours.
-// If you add fields, update CONFIG_WIRE_SIZE, pack_config() and unpack_config().
-typedef struct {
-    int blade;
-    int disc;
-    int tip;
-} BeybladeConfig;
-
 #define CONFIG_WIRE_SIZE 12       // 3 ints x 4 bytes
 
 enum {

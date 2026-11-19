@@ -15,10 +15,6 @@ Part tipCLead;
 Part bladeFollow;
 Part discFollow;
 Part tipFollow;
-typedef struct {
-    float x, y, vx, vy, mass, radius, restitution;
-    uint16_t outcolor, incolor;
-} Body;
 
 // get the user choices from each keypad entry
 void getUserchoices(int bladeChoiceLead,  int discChoiceLead, int tipChoiceLead, int bladeChoiceFollow, int discChoiceFollow, int tipChoiceFollow) {

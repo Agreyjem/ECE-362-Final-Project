@@ -2,7 +2,7 @@
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
 #include "hardware/irq.h"
-#include "uartCustom.h"
+#include "uartcustom.h"
 
 
 #define RXBUF_SIZE 64
