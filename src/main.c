@@ -242,7 +242,7 @@ int main() {
             if (!chosen) {
                 p1_config = configbeyblade();
                 chosen = true;
-                show_waiting();
+                // show_waiting();
             }
             // 2. Ask the slave for its config until it answers
             if (!have_p2) {
@@ -256,7 +256,7 @@ int main() {
                 send_reliable(CMD_START, NULL, 0)) {
                 mode = BATTLE;
             } else {
-                show_local_error();          // retries next loop
+                // show_local_error();          // retries next loop
                 sleep_ms(200);
             }
         }
@@ -266,7 +266,7 @@ int main() {
                 p2_config = configbeyblade();
                 chosen = true;
                 drain_rx();                  // discard polls that arrived while we were busy
-                show_waiting();
+                // show_waiting();
             }
 #endif
             break;
