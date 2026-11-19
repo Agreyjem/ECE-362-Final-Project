@@ -30,6 +30,16 @@
 #endif
 /****************************************** */
 
+#ifndef IS_MASTER
+#define IS_MASTER 1
+#endif
+
+static BeybladeConfig p1_config;   // master's player
+static BeybladeConfig p2_config;
+static mode_t_ mode = START;
+static bool chosen   = false;   // this board has finished configbeyblade()
+static bool have_p2  = false;   // master only: slave's config received
+
 void init_spi_lcd() {
     gpio_set_function(PIN_CS, GPIO_FUNC_SIO);
     gpio_set_function(PIN_DC, GPIO_FUNC_SIO);
@@ -112,15 +122,6 @@ BeybladeConfig configbeyblade(void);
 // Body calcStats(BeybladeConfig config);
 
 
-#ifndef IS_MASTER
-#define IS_MASTER 1
-#endif
-
-static BeybladeConfig p1_config;   // master's player
-static BeybladeConfig p2_config;
-static mode_t_ mode = START;
-static bool chosen   = false;   // this board has finished configbeyblade()
-static bool have_p2  = false;   // master only: slave's config received
 
 static void drain_rx(void) {    // throw away anything that piled up while we were busy
     uint8_t b;
@@ -139,7 +140,7 @@ static void handle_incoming_as_slave(void) {
         memset(&p1_config, 0, sizeof(p1_config));
         memset(&p2_config, 0, sizeof(p2_config));
         chosen = false;
-        clear_lcd();
+        LCD_Clear(BLACK);
         mode = CHOOSE;
         break;
 
@@ -163,7 +164,7 @@ static void handle_incoming_as_slave(void) {
     case CMD_WINNER:
         send_ack(CMD_WINNER);                // ACK duplicates too
         if (f.len == 1) {
-            display_winner(f.data[0]);
+            // display_winner(f.data[0]);
             mode = END;
         }
         break;
@@ -174,10 +175,16 @@ static void handle_incoming_as_slave(void) {
 // *************************************************//
 
 int main() {
-    stdio_init_all();
+
+    // printf("Hello World!");
+    // stdio_init_all();
+    // printf("A");
     init_uart();
+    // printf("B");
     init_uart_irq();
+    // printf("C");
     init_spi_lcd();
+    // printf("D");
 
     LCD_Setup();
     LCD_Clear(0x0000); // Clear the screen to black
@@ -225,6 +232,7 @@ int main() {
 #if IS_MASTER
             chosen = false;
             have_p2 = false;
+            // printf("%d", send_reliable(CMD_HELLO, NULL, 0));
             if (send_reliable(CMD_HELLO, NULL, 0)) mode = CHOOSE;
             else sleep_ms(200);              // slave not up yet, try again
 #endif
@@ -392,22 +400,20 @@ int main() {
         #endif
 
     
-        /*
-            Now, for some more fun!
+            // Now, for some more fun!
 
-            Uncomment the ANIMATION #define at the top of main.c 
-            to run this section.
+            // Uncomment the ANIMATION #define at the top of main.c 
+            // to run this section.
             
-            We've converted a popular GIF into a series of images, 
-            and stored each of those frames in its own C array.  
-            Look at the lab for the script we wrote to do this.
+            // We've converted a popular GIF into a series of images, 
+            // and stored each of those frames in its own C array.  
+            // Look at the lab for the script we wrote to do this.
 
-            This is an example of how you can draw a very large picture, 
-            but notice how slow the animation is, even at 100 MHz.  
-            The LCD_DrawPicture function is not really intended for such 
-            large images, but it will be very helpful for smaller ones, 
-            like scary monsters and nice sprites in a game.
-        */ 
+            // This is an example of how you can draw a very large picture, 
+            // but notice how slow the animation is, even at 100 MHz.  
+            // The LCD_DrawPicture function is not really intended for such 
+            // large images, but it will be very helpful for smaller ones, 
+            // like scary monsters and nice sprites in a game.
 
         #ifdef ANIMATION
         Picture* frame_pic = NULL;
