@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>   
+#include "uartcustom.h"
+#include "header.h"
 
 /****************************************** */
 #define PIN_SDI    15
@@ -117,17 +119,76 @@ typedef struct {
 	int tip;
 } BeybladeConfig;
 
-// BeybladeConfig configbeyblade();
+BeybladeConfig configbeyblade(void);
 // Body calcStats(BeybladeConfig config);
 int determineWinner(Body p1, Body p2);
 void sendData(p1, p2, winner);
 
+#ifndef IS_MASTER
+#define IS_MASTER 1
+#endif
+
+static BeybladeConfig p1_config;   // master's player
+static BeybladeConfig p2_config;
+static mode_t_ mode = START;
+static bool chosen   = false;   // this board has finished configbeyblade()
+static bool have_p2  = false;   // master only: slave's config received
+
+static void drain_rx(void) {    // throw away anything that piled up while we were busy
+    uint8_t b;
+    while (uart_rx_pop(&b)) {}
+}
+
+// ============================== Slave message handler ==========================
+#if !IS_MASTER
+static void handle_incoming_as_slave(void) {
+    frame_t f;
+    if (!poll_frame(&f)) return;
+
+    switch (f.cmd) {
+    case CMD_HELLO:                          // also resyncs us if the master restarted
+        send_ack(CMD_HELLO);
+        memset(&p1_config, 0, sizeof(p1_config));
+        memset(&p2_config, 0, sizeof(p2_config));
+        chosen = false;
+        clear_lcd();
+        mode = MODE_CHOOSE;
+        break;
+
+    case CMD_GET_CONFIG:                     // only answer once our player is done choosing
+        if (chosen) {
+            uint8_t buf[CONFIG_WIRE_SIZE];
+            pack_config(&p2_config, buf);
+            send_frame(CMD_CONFIG_RESP, buf, sizeof(buf));
+        }
+        break;
+
+    case CMD_CONFIG:                         // master's (player 1) config
+        if (unpack_config(&f, &p1_config)) send_ack(CMD_CONFIG);
+        break;
+
+    case CMD_START:
+        send_ack(CMD_START);
+        mode = MODE_GAME;
+        break;
+
+    case CMD_WINNER:
+        send_ack(CMD_WINNER);                // ACK duplicates too
+        if (f.len == 1) {
+            display_winner(f.data[0]);
+            mode = MODE_END;
+        }
+        break;
+    }
+}
+#endif
 
 // *************************************************//
 
 int main() {
     stdio_init_all();
-
+    init_uart();
+    init_uart_irq();
     init_spi_lcd();
 
     LCD_Setup();
@@ -159,171 +220,229 @@ int main() {
         { .x=180.0f, .y=250.0f, .vx=-0.8f, .vy=-1.0f, .mass=25.0f, .radius = 10, .restitution = 1, .outcolor=LIME, .incolor = RED }
         // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
     };
-
-    int mode = CHOOSE;
-
-    // Infinite Animation Loop
-
-    if (mode == START)
-    {
-        sound_init();
-        play_start();
-        sound_wait();
-        LCD_Clear(BLACK);
-        LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);;
-    }
-
-    if (mode == CHOOSE)
-    {
-        LCD_Clear(BLACK);
-        // LCD_DrawString(40,10, CYAN, BLACK, "Build your Beyblade!", 16, 1);
-        
-        configbeyblade();
-        // BeybladeConfig p2_config = configbeyblade();
-        // Body p1 = calcStats(p1_config);
-        // Body p2 = calcStats(p2_config);
-        // winner = determineWinner(p1, p2);
-        // sendData(p1, p2, winner);
-        // mode = BATTLE;
-    }
-
-    while(mode == BATTLE) {
-            // Calculate accelerations and update velocities
-            for (int i = 0; i < N_BODIES; i++) {
-                // float total_accel_x = 0.0f;
-                // float total_accel_y = 0.0f;
-
-                // for (int j = 0; j < N_BODIES; j++) {
-                //     if (i == j) continue;
-
-                //     float dx = bodies[j].x - bodies[i].x;
-                //     float dy = bodies[j].y - bodies[i].y;
-                //     // d^2 = dx^2 + dy^2 (+ a fake softening factor to avoid collisions)
-                //     float dist_sq = dx * dx + dy * dy + SOFTENING;
-                //     // Newton's law of gravitation: F = G * m1 * m2 / d^2
-                //     float inv_dist_cubed = 1.0f / (dist_sq * sqrtf(dist_sq));
-                    
-                //     // Acceleration = Force / mass, but we multiply by mass to get the force directly
-                //     // so we can use it to update velocity directly.
-                //     total_accel_x += dx * inv_dist_cubed * bodies[j].mass * G;
-                //     total_accel_y += dy * inv_dist_cubed * bodies[j].mass * G;
-                // }
-                // bodies[i].vx += total_accel_x * DT * 100;
-                // bodies[i].vy += total_accel_y * DT * 100;
-
-                for (int j = i + 1; j < N_BODIES; j++) {
-                        if (handle_collision(&bodies[i], &bodies[j])) LCD_Clear(BLACK);
-                }
-            }
-
-            for (int i = 0; i < N_BODIES; i++) {
-            // Apply boundary collision calculations here
-                if (bodies[i].x - bodies[i].radius < 0) {
-                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                    bodies[i].x = bodies[i].radius;
-                    bodies[i].vx = fabsf(bodies[i].vx) * bodies[i].restitution;
-                }
-
-                if (bodies[i].x + bodies[i].radius >= 240) {
-                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                    bodies[i].x = 240 - bodies[i].radius;
-                    bodies[i].vx = -fabsf(bodies[i].vx) * bodies[i].restitution;
-                }
-
-                if (bodies[i].y - bodies[i].radius < 0) {
-                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                    bodies[i].y = bodies[i].radius;
-                    bodies[i].vy = fabsf(bodies[i].vy) * bodies[i].restitution;
-                }
-
-                if (bodies[i].y + bodies[i].radius >= 320) {
-                    LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                    LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                    bodies[i].y = 320 - bodies[i].radius;
-                    bodies[i].vy = -fabsf(bodies[i].vx) * bodies[i].restitution;
-                }
-            }
-            // Update positions and draw each body
-            for (int i = 0; i < N_BODIES; i++) {
-                int old_x = (int)bodies[i].x;
-                int old_y = (int)bodies[i].y;
-                // new position = old position + velocity * time step
-                bodies[i].x += bodies[i].vx * DT * 350;
-                bodies[i].y += bodies[i].vy * DT * 350;
-
-                // Wrap around screen edges
-                // if (bodies[i].x < 0)    bodies[i].x += 240;
-                // if (bodies[i].x >= 240) bodies[i].x -= 240;
-                // if (bodies[i].y < 0)    bodies[i].y += 320;
-                // if (bodies[i].y >= 320) bodies[i].y -= 320;
-
-                // LCD_DrawPoint(old_x, old_y, BLACK);
-                // LCD_DrawPoint((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].color);
-                LCD_Circle(old_x, old_y, bodies[i].radius, 0, BLACK);
-                LCD_Circle(old_x, old_y, 5, 0, BLACK);
-                LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].radius, 0, bodies[i].outcolor);
-                LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, 5, 0, bodies[i].incolor);
-            }
-
-            // Slow it WAY down so we can see the planets interact with each other!
-            // sleep_us(0.1);
-            time++;
-            if (time > THRESH) {mode = END;}
-    }
-
-    if (mode == END)
-    {
-        LCD_Clear(BLACK);
-        LCD_DrawString(90,150, CYAN, BLACK, "Winner: ", 16, 1);
-    }
-
+    for(;;){
+    #if IS_MASTER
+        handle_incoming_as_slave();
     #endif
-    
-    /*
-        Now, for some more fun!
 
-        Uncomment the ANIMATION #define at the top of main.c 
-        to run this section.
-        
-        We've converted a popular GIF into a series of images, 
-        and stored each of those frames in its own C array.  
-        Look at the lab for the script we wrote to do this.
+        // Infinite Animation Loop
 
-        This is an example of how you can draw a very large picture, 
-        but notice how slow the animation is, even at 100 MHz.  
-        The LCD_DrawPicture function is not really intended for such 
-        large images, but it will be very helpful for smaller ones, 
-        like scary monsters and nice sprites in a game.
-    */ 
+        if (mode == START)
+        {
+            sound_init();
+            play_start();
+            sound_wait();
+            LCD_Clear(BLACK);
+            LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);;
+#if IS_MASTER
+            chosen = false;
+            have_p2 = false;
+            if (send_reliable(CMD_HELLO, NULL, 0)) mode = CHOOSE;
+            else sleep_ms(200);              // slave not up yet, try again
+#endif
+            break;
 
-    #ifdef ANIMATION
-    Picture* frame_pic = NULL;
-    int frame_index = 0;
-    while (1) { // Loop forever
-        // Get the next frame from the array
-        frame_pic = load_image(mystery_frames[frame_index]);
-    
-        if (frame_pic) {
-            // Draw the frame to the top-left corner of the screen
-            LCD_DrawPicture(0, 0, frame_pic);
+        }
+
+        if (mode == CHOOSE)
+        {
+            LCD_Clear(BLACK);
+            // LCD_DrawString(40,10, CYAN, BLACK, "Build your Beyblade!", 16, 1);
+#if IS_MASTER
+        {
+            // 1. Master's player picks their own config (slave's player is doing the same)
+            if (!chosen) {
+                p1_config = configbeyblade();
+                chosen = true;
+                show_waiting();
+            }
+            // 2. Ask the slave for its config until it answers
+            if (!have_p2) {
+                if (!request_slave_config(&p2_config)) { sleep_ms(150); break; }
+                have_p2 = true;
+            }
+            // 3. Give the slave our config, then start
+            uint8_t buf[CONFIG_WIRE_SIZE];
+            pack_config(&p1_config, buf);
+            if (send_reliable(CMD_CONFIG, buf, sizeof(buf)) &&
+                send_reliable(CMD_START, NULL, 0)) {
+                mode = BATTLE;
+            } else {
+                show_local_error();          // retries next loop
+                sleep_ms(200);
+            }
+        }
+#else
+            // Slave: pick our config once, then wait for the master's requests
+            if (!chosen) {
+                p2_config = configbeyblade();
+                chosen = true;
+                drain_rx();                  // discard polls that arrived while we were busy
+                show_waiting();
+            }
+#endif
+            break;
+            // BeybladeConfig p2_config = configbeyblade();
+            // Body p1 = calcStats(p1_config);
+            // Body p2 = calcStats(p2_config);
+            // winner = determineWinner(p1, p2);
+            // sendData(p1, p2, winner);
+            // mode = BATTLE;
+        }
+
+        while(mode == BATTLE) {
+                // Calculate accelerations and update velocities
             
-            // Free the Picture struct (not the pixel data)
-            free_image(frame_pic);
-        }
-    
-        // Move to the next frame, looping back to the start
-        frame_index++;
-        if (frame_index >= mystery_frame_count) {
-            frame_index = 0;
-        }
-    
-        // Add a small delay to control animation speed
-        sleep_ms(1); // Adjust delay as needed
-    }
-    #endif
+                for (int i = 0; i < N_BODIES; i++) {
+                    // float total_accel_x = 0.0f;
+                    // float total_accel_y = 0.0f;
 
-    for(;;);
+                    // for (int j = 0; j < N_BODIES; j++) {
+                    //     if (i == j) continue;
+
+                    //     float dx = bodies[j].x - bodies[i].x;
+                    //     float dy = bodies[j].y - bodies[i].y;
+                    //     // d^2 = dx^2 + dy^2 (+ a fake softening factor to avoid collisions)
+                    //     float dist_sq = dx * dx + dy * dy + SOFTENING;
+                    //     // Newton's law of gravitation: F = G * m1 * m2 / d^2
+                    //     float inv_dist_cubed = 1.0f / (dist_sq * sqrtf(dist_sq));
+                        
+                    //     // Acceleration = Force / mass, but we multiply by mass to get the force directly
+                    //     // so we can use it to update velocity directly.
+                    //     total_accel_x += dx * inv_dist_cubed * bodies[j].mass * G;
+                    //     total_accel_y += dy * inv_dist_cubed * bodies[j].mass * G;
+                    // }
+                    // bodies[i].vx += total_accel_x * DT * 100;
+                    // bodies[i].vy += total_accel_y * DT * 100;
+
+                    for (int j = i + 1; j < N_BODIES; j++) {
+                            if (handle_collision(&bodies[i], &bodies[j])) LCD_Clear(BLACK);
+                    }
+                }
+
+                for (int i = 0; i < N_BODIES; i++) {
+                // Apply boundary collision calculations here
+                    if (bodies[i].x - bodies[i].radius < 0) {
+                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                        bodies[i].x = bodies[i].radius;
+                        bodies[i].vx = fabsf(bodies[i].vx) * bodies[i].restitution;
+                    }
+
+                    if (bodies[i].x + bodies[i].radius >= 240) {
+                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                        bodies[i].x = 240 - bodies[i].radius;
+                        bodies[i].vx = -fabsf(bodies[i].vx) * bodies[i].restitution;
+                    }
+
+                    if (bodies[i].y - bodies[i].radius < 0) {
+                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                        bodies[i].y = bodies[i].radius;
+                        bodies[i].vy = fabsf(bodies[i].vy) * bodies[i].restitution;
+                    }
+
+                    if (bodies[i].y + bodies[i].radius >= 320) {
+                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
+                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
+                        bodies[i].y = 320 - bodies[i].radius;
+                        bodies[i].vy = -fabsf(bodies[i].vx) * bodies[i].restitution;
+                    }
+                }
+                // Update positions and draw each body
+                for (int i = 0; i < N_BODIES; i++) {
+                    int old_x = (int)bodies[i].x;
+                    int old_y = (int)bodies[i].y;
+                    // new position = old position + velocity * time step
+                    bodies[i].x += bodies[i].vx * DT * 350;
+                    bodies[i].y += bodies[i].vy * DT * 350;
+
+                    // Wrap around screen edges
+                    // if (bodies[i].x < 0)    bodies[i].x += 240;
+                    // if (bodies[i].x >= 240) bodies[i].x -= 240;
+                    // if (bodies[i].y < 0)    bodies[i].y += 320;
+                    // if (bodies[i].y >= 320) bodies[i].y -= 320;
+
+                    // LCD_DrawPoint(old_x, old_y, BLACK);
+                    // LCD_DrawPoint((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].color);
+                    LCD_Circle(old_x, old_y, bodies[i].radius, 0, BLACK);
+                    LCD_Circle(old_x, old_y, 5, 0, BLACK);
+                    LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].radius, 0, bodies[i].outcolor);
+                    LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, 5, 0, bodies[i].incolor);
+                }
+
+                // Slow it WAY down so we can see the planets interact with each other!
+                // sleep_us(0.1);
+                time++;
+                if (time > THRESH) {mode = END;}
+
+        }
+
+        if (mode == END)
+        {
+            LCD_Clear(BLACK);
+#if IS_MASTER
+        {
+            int winner = determine_winner(&p1_config, &p2_config);
+            if (!send_reliable(CMD_WINNER, &winner, 1)) show_local_error();
+            display_winner(winner);
+            sleep_ms(3000);                  // or wait for a restart button
+            mode = START;               // HELLO pulls the slave back to Choose
+        }
+#endif
+            if (winner == 1) {
+                LCD_DrawString(90,170, CYAN, BLACK, "Player 1", 16, 1);
+            } else if (winner == 2) {
+                LCD_DrawString(90,170, CYAN, BLACK, "Player 2", 16, 1);
+            } else {
+                LCD_DrawString(90,170, CYAN, BLACK, "Tie!", 16, 1);
+            }
+        }
+        #endif
+
+    
+        /*
+            Now, for some more fun!
+
+            Uncomment the ANIMATION #define at the top of main.c 
+            to run this section.
+            
+            We've converted a popular GIF into a series of images, 
+            and stored each of those frames in its own C array.  
+            Look at the lab for the script we wrote to do this.
+
+            This is an example of how you can draw a very large picture, 
+            but notice how slow the animation is, even at 100 MHz.  
+            The LCD_DrawPicture function is not really intended for such 
+            large images, but it will be very helpful for smaller ones, 
+            like scary monsters and nice sprites in a game.
+        */ 
+
+        #ifdef ANIMATION
+        Picture* frame_pic = NULL;
+        int frame_index = 0;
+        while (1) { // Loop forever
+            // Get the next frame from the array
+            frame_pic = load_image(mystery_frames[frame_index]);
+        
+            if (frame_pic) {
+                // Draw the frame to the top-left corner of the screen
+                LCD_DrawPicture(0, 0, frame_pic);
+                
+                // Free the Picture struct (not the pixel data)
+                free_image(frame_pic);
+            }
+        
+            // Move to the next frame, looping back to the start
+            frame_index++;
+            if (frame_index >= mystery_frame_count) {
+                frame_index = 0;
+            }
+        
+            // Add a small delay to control animation speed
+            sleep_ms(1); // Adjust delay as needed
+        }
+    #endif
+    }
 }
