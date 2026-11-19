@@ -160,7 +160,7 @@ int main() {
         // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
     };
 
-    int mode = START;
+    int mode = CHOOSE;
 
     // Infinite Animation Loop
 
@@ -176,17 +176,7 @@ int main() {
     if (mode == CHOOSE)
     {
         LCD_Clear(BLACK);
-        LCD_DrawString(80,10, CYAN, BLACK, "Blade Specs", 16, 1);
-        
-        for (int i = 70; i < 300; i = i + 20)
-        {
-            LCD_DrawChar(120, i, WHITE, BLACK, '|', 16, 1);
-        }
-        
-        for (int i = 60; i < 300; i = i + 60)
-        {
-            LCD_DrawString(0, i, WHITE, BLACK, "-----------------------------", 16, 1);
-        }
+        // LCD_DrawString(40,10, CYAN, BLACK, "Build your Beyblade!", 16, 1);
         
         configbeyblade();
         // BeybladeConfig p2_config = configbeyblade();

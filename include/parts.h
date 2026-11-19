@@ -5,6 +5,7 @@
 #define BLADE_COUNT 5
 #define DISC_COUNT 5
 #define TIP_COUNT 5
+#define STAT_COUNT 6
 
 
 typedef struct {
