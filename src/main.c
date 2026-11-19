@@ -373,8 +373,10 @@ int main() {
             float p1_angle, p1_speed, p2_angle, p2_speed;
 #if IS_MASTER
         {
-            int winner = determine_winner(p1_angle, p1_speed, p2_angle, p2_speed , &p1_config, &p2_config);
-            if (!send_reliable(CMD_WINNER, &winner, 1)) show_local_error();
+            int winner = determineWinner(p1_angle, p1_speed, p2_angle, p2_speed , p1_config, p2_config);
+            if (!send_reliable(CMD_WINNER, &winner, 1)) {
+                break;
+            }
             display_winner(winner);
             sleep_ms(3000);                  // or wait for a restart button
             mode = START;               // HELLO pulls the slave back to Choose
