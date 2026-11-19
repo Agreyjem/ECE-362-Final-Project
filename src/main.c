@@ -370,9 +370,10 @@ int main() {
         if (mode == END)
         {
             LCD_Clear(BLACK);
+            float p1_angle, p1_speed, p2_angle, p2_speed;
 #if IS_MASTER
         {
-            int winner = determine_winner(bodies[0], bodies[1], &p1_config, &p2_config);
+            int winner = determine_winner(p1_angle, p1_speed, p2_angle, p2_speed , &p1_config, &p2_config);
             if (!send_reliable(CMD_WINNER, &winner, 1)) show_local_error();
             display_winner(winner);
             sleep_ms(3000);                  // or wait for a restart button
