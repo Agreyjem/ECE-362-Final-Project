@@ -8,7 +8,7 @@
 #define START_BYTE    0xAA
 #define MAX_PAYLOAD   16          // must be >= CONFIG_WIRE_SIZE
 
-typedef enum { START, CHOOSE, GAME, END } mode_t_;
+typedef enum { START, CHOOSE, BATTLE, END } mode_t_;
 
 // If BeybladeConfig is already defined in your own header, delete this and include yours.
 // If you add fields, update CONFIG_WIRE_SIZE, pack_config() and unpack_config().

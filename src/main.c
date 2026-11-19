@@ -52,7 +52,7 @@ void init_spi_lcd() {
 
 Picture* load_image(const char* image_data);
 void free_image(Picture* pic);
-enum Mode {START, CHOOSE, BATTLE, END};
+
 
 // Make things easier to keep track of for each "body".
     typedef struct {
