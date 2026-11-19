@@ -140,7 +140,7 @@ static void handle_incoming_as_slave(void) {
         memset(&p2_config, 0, sizeof(p2_config));
         chosen = false;
         clear_lcd();
-        mode = MODE_CHOOSE;
+        mode = CHOOSE;
         break;
 
     case CMD_GET_CONFIG:                     // only answer once our player is done choosing
@@ -157,14 +157,14 @@ static void handle_incoming_as_slave(void) {
 
     case CMD_START:
         send_ack(CMD_START);
-        mode = MODE_GAME;
+        mode = BATTLE;
         break;
 
     case CMD_WINNER:
         send_ack(CMD_WINNER);                // ACK duplicates too
         if (f.len == 1) {
             display_winner(f.data[0]);
-            mode = MODE_END;
+            mode = END;
         }
         break;
     }
