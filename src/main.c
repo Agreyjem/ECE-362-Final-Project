@@ -121,8 +121,7 @@ typedef struct {
 
 BeybladeConfig configbeyblade(void);
 // Body calcStats(BeybladeConfig config);
-int determineWinner(Body p1, Body p2);
-void sendData(p1, p2, winner);
+
 
 #ifndef IS_MASTER
 #define IS_MASTER 1
@@ -384,7 +383,7 @@ int main() {
             LCD_Clear(BLACK);
 #if IS_MASTER
         {
-            int winner = determine_winner(&p1_config, &p2_config);
+            int winner = determine_winner(bodies[0], bodies[1], &p1_config, &p2_config);
             if (!send_reliable(CMD_WINNER, &winner, 1)) show_local_error();
             display_winner(winner);
             sleep_ms(3000);                  // or wait for a restart button
