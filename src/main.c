@@ -36,7 +36,7 @@
 
 static BeybladeConfig p1_config;   // master's player
 static BeybladeConfig p2_config;
-static mode_t_ mode = START;
+static mode_t_ mode = BATTLE;
 static bool chosen   = false;   // this board has finished configbeyblade()
 static bool have_p2  = false;   // master only: slave's config received
 
@@ -378,6 +378,7 @@ int main() {
         if (mode == END)
         {
             LCD_Clear(BLACK);
+            LCD_DrawString(30,150, CYAN, BLACK, "THANK YOU FOR PLAYING", 16, 1);;
             float p1_angle, p1_speed, p2_angle, p2_speed;
 #if IS_MASTER
         {
