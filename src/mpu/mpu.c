@@ -105,7 +105,7 @@ double mpu_getreading(void)
     stdio_init_all();
     mpu6050_init();
     sleep_ms(2000);
-    previous_time = get_absolute_time;
+    previous_time = get_absolute_time();
     
     update_orientation(&angle_x, &angle_y, &angle_z, previous_time);
     sleep_ms(1000);

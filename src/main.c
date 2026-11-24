@@ -54,7 +54,6 @@ static float angleFollower = 0;
 static float speedFollower = 0;
 static bool  have_leader_launch   = false;  
 static bool  have_follower_launch = false; 
-
 static Body bodies[N_BODIES];
 
 // ============================== Role detection ==============================
