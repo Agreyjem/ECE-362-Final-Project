@@ -110,6 +110,6 @@ double mpu_getreading(void)
     update_orientation(&angle_x, &angle_y, &angle_z, previous_time);
     sleep_ms(1000);
 
-    return 0;
+    return angle_y;
 
 }
