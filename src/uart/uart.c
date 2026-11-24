@@ -3,6 +3,7 @@
 #include "hardware/uart.h"
 #include "hardware/irq.h"
 #include "uartcustom.h"
+#include "string.h"
 
 
 #define RXBUF_SIZE 64
