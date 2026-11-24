@@ -48,6 +48,12 @@ static bool have_p1 = false;       // follower only: leader config received
 static uint8_t winner = 0;         // 0 = tie, 1 = player 1, 2 = player 2
 static bool winner_sent = false;   // leader only
 static int  frame_count = 0;
+static float angleLeader = 0;
+static float speedLeader = 0;
+static float angleFollower = 0;
+static float speedFollower = 0;
+static bool  have_leader_launch   = false;  
+static bool  have_follower_launch = false; 
 
 static Body bodies[N_BODIES];
 
@@ -222,6 +228,18 @@ static void handle_incoming_as_follower(void) {
         }
         break;
 
+    // case CMD_GET_LAUNCH:
+    //     if (state == GS_CHOOSE && chosen) {
+    //         float a, s;
+    //         getMotorRPM(&s);
+    //         getMPUAngle(&a);
+    //         uint8_t buf[8];
+    //         memcpy(buf,     &a, 4);
+    //         memcpy(buf + 4, &s, 4);
+    //         send_frame(CMD_LAUNCH_RESP, buf, sizeof(buf));
+    //     }
+    //     break;
+
     case CMD_CONFIG:
         if (unpack_config(&f, &p1_config)) {
             have_p1 = true;
@@ -265,15 +283,14 @@ int main(void) {
         // send_reliable()/request_slave_config(), which read the replies themselves.
         if (!is_leader) handle_incoming_as_follower();
 
-        // NOTE: use `break` only to leave the switch. Never break the for(;;).
         switch (state) {
 
-        case GS_WAIT:                         // follower: HELLO handler moves us on
+        case GS_WAIT:                        
             break;
 
         case GS_START:                        // leader
             if (send_reliable(CMD_HELLO, NULL, 0)) enter_choose();
-            else sleep_ms(200);               // follower not up yet
+            else sleep_ms(200);               
             break;
 
         case GS_CHOOSE:
@@ -288,6 +305,18 @@ int main(void) {
                     if (!request_slave_config(&p2_config)) { sleep_ms(150); break; }
                     have_p2 = true;
                 }
+                // if (!have_leader_launch) {
+                //     getMotorRPM(&speedLeader);
+                //     getMPUAngle(&angleLeader);
+                //     have_leader_launch = true;
+                // }
+                // if (!have_follower_launch) {
+                //     if (!request_slave_launch(&angleFollower, &speedFollower)) {
+                //         sleep_ms(150);
+                //         break;                      // retry next pass, same pattern as config
+                //     }
+                //     have_follower_launch = true;
+                // }
                 uint8_t buf[CONFIG_WIRE_SIZE];
                 pack_config(&p1_config, buf);
                 if (send_reliable(CMD_CONFIG, buf, sizeof(buf)) &&
@@ -332,7 +361,7 @@ int main(void) {
                 if (b->y + b->radius >= 320) {
                     erase_body(b);
                     b->y = 320 - b->radius;
-                    b->vy = -fabsf(b->vy) * b->restitution;   // was vx: bug
+                    b->vy = -fabsf(b->vy) * b->restitution;  
                 }
             }
 
@@ -355,13 +384,12 @@ int main(void) {
 
         case GS_END:
             if (is_leader) {
-                winner = determineWinner(.1,.5,.5,.1,p1_config,p2_config);
                 if (!winner_sent) {
                     if (send_reliable(CMD_WINNER, &winner, 1)) winner_sent = true;
                     else { sleep_ms(200); break; }
                 }
                 sleep_ms(3000);
-                enter_start();                // HELLO pulls the follower back to CHOOSE
+                enter_start();                
             }
             break;
         }

@@ -13,13 +13,15 @@ typedef enum { START, CHOOSE, BATTLE, END } mode_t_;
 #define CONFIG_WIRE_SIZE 12       // 3 ints x 4 bytes
 
 enum {
-    CMD_HELLO       = 1,   // M->S  no payload
-    CMD_GET_CONFIG  = 2,   // M->S  no payload: "send me your config if you're done choosing"
-    CMD_CONFIG_RESP = 3,   // S->M  payload: slave's (player 2) config
-    CMD_CONFIG      = 4,   // M->S  payload: master's (player 1) config
-    CMD_START       = 5,   // M->S  no payload
-    CMD_WINNER      = 6,   // M->S  payload: winner id (0 = P1/master, 1 = P2/slave)
-    CMD_ACK         = 7    // payload: [0] = command being acknowledged
+    CMD_HELLO       = 1,
+    CMD_GET_CONFIG  = 2,
+    CMD_CONFIG_RESP = 3,
+    CMD_CONFIG      = 4,
+    CMD_START       = 5,
+    CMD_WINNER      = 6,
+    CMD_ACK         = 7,
+    CMD_GET_LAUNCH  = 8,   // M->S  no payload: "send me your angle/speed"
+    CMD_LAUNCH_RESP = 9    // S->M  payload: float angle, float speed (8 bytes)
 };
 
 typedef struct {
@@ -51,5 +53,6 @@ bool unpack_config(const frame_t *f, BeybladeConfig *c);      // false if length
 
 // Master: ask the slave for its config. Returns true once it answers.
 bool request_slave_config(BeybladeConfig *out);
+bool request_slave_launch(float *angle, float *speed);
 
 #endif // UART_CUSTOM_H

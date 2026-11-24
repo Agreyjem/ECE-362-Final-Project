@@ -158,7 +158,19 @@ bool request_slave_config(BeybladeConfig *out) {
     }
     return false;
 }
-
+bool request_slave_launch(float *angle, float *speed) {
+    send_frame(CMD_GET_LAUNCH, NULL, 0);
+    absolute_time_t deadline = make_timeout_time_ms(100);
+    frame_t f;
+    while (!time_reached(deadline)) {
+        if (poll_frame(&f) && f.cmd == CMD_LAUNCH_RESP && f.len == 8) {
+            memcpy(angle, f.data,     4);
+            memcpy(speed, f.data + 4, 4);
+            return true;
+        }
+    }
+    return false;
+}
 
 // int main(void) {
 //     stdio_init_all();
