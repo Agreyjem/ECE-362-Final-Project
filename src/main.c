@@ -6,6 +6,7 @@
 #include <math.h>   
 #include "uartcustom.h" // uartcustom includes header 
 #include "spinning.h"
+#include "audio.h"
 
 /****************************************** */
 #define PIN_SDI    15
@@ -14,6 +15,7 @@
 #define PIN_DC     17
 #define PIN_nRESET 16
 #define THRESH 500
+#define PIN_ROLE   10
 
 // Uncomment the following #define when 
 // you are ready to run Step 3.
@@ -30,16 +32,34 @@
 #endif
 /****************************************** */
 
-#ifndef IS_MASTER
-#define IS_MASTER 1
-#endif
+BeybladeConfig configbeyblade(void);
 
-static BeybladeConfig p1_config;   // master's player
-static BeybladeConfig p2_config;
-static mode_t_ mode = BATTLE;
-static bool chosen   = false;   // this board has finished configbeyblade()
-static bool have_p2  = false;   // master only: slave's config received
+// Own state enum so we don't depend on what spinning.h defines.
+typedef enum { GS_WAIT, GS_START, GS_CHOOSE, GS_BATTLE, GS_END } game_state_t;
 
+static game_state_t state;
+static bool is_leader;
+
+static BeybladeConfig p1_config;   // leader's player
+static BeybladeConfig p2_config;   // follower's player
+static bool chosen  = false;       // this board finished configbeyblade()
+static bool have_p2 = false;       // leader only: follower config received
+static bool have_p1 = false;       // follower only: leader config received
+static uint8_t winner = 0;         // 0 = tie, 1 = player 1, 2 = player 2
+static bool winner_sent = false;   // leader only
+static int  frame_count = 0;
+
+static Body bodies[N_BODIES];
+
+// ============================== Role detection ==============================
+// Runs once at boot. Same binary on both boards; a jumper decides the role.
+static void init_role(void) {
+    gpio_init(PIN_ROLE);
+    gpio_set_dir(PIN_ROLE, GPIO_IN);
+    gpio_pull_up(PIN_ROLE);
+    sleep_ms(5);                       // let the pull-up settle
+    is_leader = gpio_get(PIN_ROLE);    // high = leader, jumpered low = follower
+}
 void init_spi_lcd() {
     gpio_set_function(PIN_CS, GPIO_FUNC_SIO);
     gpio_set_function(PIN_DC, GPIO_FUNC_SIO);
@@ -117,329 +137,254 @@ int handle_collision(Body *a, Body *b) {
     return 1;
 
 }
+static void reset_bodies(void) {
+    bodies[0] = (Body){ .x=120.0f, .y=100.0f, .vx= 1.2f, .vy= 0.5f, .mass=20.0f,
+                        .radius=10, .restitution=1, .outcolor=RED,  .incolor=BLUE };
+    bodies[1] = (Body){ .x=180.0f, .y=250.0f, .vx=-0.8f, .vy=-1.0f, .mass=25.0f,
+                        .radius=10, .restitution=1, .outcolor=LIME, .incolor=RED };
+}
 
-BeybladeConfig configbeyblade(void);
-// Body calcStats(BeybladeConfig config);
+static void erase_body(const Body *b) {
+    LCD_Circle(b->x, b->y, b->radius, 0, BLACK);
+    LCD_Circle(b->x, b->y, 5, 0, BLACK);
+}
 
-
-
-static void drain_rx(void) {    // throw away anything that piled up while we were busy
+// ============================== Screens / transitions ==============================
+static void drain_rx(void) {
     uint8_t b;
     while (uart_rx_pop(&b)) {}
 }
 
-// ============================== Slave message handler ==========================
-#if !IS_MASTER
-static void handle_incoming_as_slave(void) {
+static void show_result(uint8_t w) {
+    LCD_Clear(BLACK);
+    LCD_DrawString(30, 150, CYAN, BLACK, "THANK YOU FOR PLAYING", 16, 1);
+    if (w == 1)      LCD_DrawString(90, 170, CYAN, BLACK, "Player 1 Won!", 16, 1);
+    else if (w == 2) LCD_DrawString(90, 170, CYAN, BLACK, "Player 2 Won!", 16, 1);
+    else             LCD_DrawString(90, 170, CYAN, BLACK, "Tie!",     16, 1);
+}
+
+static void enter_wait(void) {            // follower idle screen
+    state = GS_WAIT;
+    LCD_Clear(BLACK);
+    LCD_DrawString(30, 150, CYAN, BLACK, "Waiting for opponent", 16, 1);
+}
+
+static void enter_start(void) {           // leader title screen + HELLO retries
+    state = GS_START;
+    sound_init();
+    play_start();
+    sound_wait();
+    LCD_Clear(BLACK);
+    LCD_DrawString(90, 150, CYAN, BLACK, "BEYBLADE", 16, 1);
+}
+
+static void enter_choose(void) {
+    state = GS_CHOOSE;
+    memset(&p1_config, 0, sizeof(p1_config));
+    memset(&p2_config, 0, sizeof(p2_config));
+    chosen = have_p1 = have_p2 = false;
+    LCD_Clear(BLACK);
+}
+
+static void enter_battle(void) {
+    state = GS_BATTLE;
+    reset_bodies();
+    frame_count = 0;
+    LCD_Clear(BLACK);
+}
+
+static void enter_end_leader(void) {
+    state = GS_END;
+    // TODO: fill in the real launch angle/speed for each player.
+    float p1_angle = 0, p1_speed = 0, p2_angle = 0, p2_speed = 0;
+    winner = (uint8_t)determineWinner(p1_angle, p1_speed, p2_angle, p2_speed,
+                                      p1_config, p2_config);
+    winner_sent = false;
+    show_result(winner);
+}
+
+// ============================== Follower message handler ==============================
+static void handle_incoming_as_follower(void) {
     frame_t f;
     if (!poll_frame(&f)) return;
 
     switch (f.cmd) {
-    case CMD_HELLO:                          // also resyncs us if the master restarted
+    case CMD_HELLO:
         send_ack(CMD_HELLO);
-        memset(&p1_config, 0, sizeof(p1_config));
-        memset(&p2_config, 0, sizeof(p2_config));
-        chosen = false;
-        LCD_Clear(BLACK);
-        mode = CHOOSE;
+        if (state != GS_CHOOSE) enter_choose();   // idempotent: retries don't wipe a choice
         break;
 
-    case CMD_GET_CONFIG:                     // only answer once our player is done choosing
-        if (chosen) {
+    case CMD_GET_CONFIG:
+        if (state == GS_CHOOSE && chosen) {
             uint8_t buf[CONFIG_WIRE_SIZE];
             pack_config(&p2_config, buf);
             send_frame(CMD_CONFIG_RESP, buf, sizeof(buf));
         }
         break;
 
-    case CMD_CONFIG:                         // master's (player 1) config
-        if (unpack_config(&f, &p1_config)) send_ack(CMD_CONFIG);
+    case CMD_CONFIG:
+        if (unpack_config(&f, &p1_config)) {
+            have_p1 = true;
+            send_ack(CMD_CONFIG);
+        }
         break;
 
     case CMD_START:
-        send_ack(CMD_START);
-        mode = BATTLE;
+        if (have_p1 && chosen) {
+            send_ack(CMD_START);
+            if (state != GS_BATTLE) enter_battle();   // ACK duplicates, don't restart
+        }
         break;
 
     case CMD_WINNER:
-        send_ack(CMD_WINNER);                // ACK duplicates too
-        if (f.len == 1) {
-            // display_winner(f.data[0]);
-            mode = END;
+        send_ack(CMD_WINNER);
+        if (f.len == 1 && state != GS_END) {
+            winner = f.data[0];
+            state = GS_END;
+            show_result(winner);
         }
         break;
     }
 }
-#endif
 
-// *************************************************//
-
-int main() {
-
-    // printf("Hello World!");
-    // stdio_init_all();
-    // printf("A");
+// ============================== Main ==============================
+#ifndef ANIMATION
+int main(void) {
     init_uart();
-    // printf("B");
     init_uart_irq();
-    // printf("C");
     init_spi_lcd();
-    // printf("D");
-
     LCD_Setup();
-    LCD_Clear(0x0000); // Clear the screen to black
-
-    #ifndef ANIMATION
-    #define N_BODIES   2      // Number of bodies in the simulation
-    #define G          12.0f  // Gravitational constant
-    #define DT         0.01f // Simulation time step
-    #define SOFTENING  5.0f   // Prevents extreme forces at close range
-
-    // Colors as per the 16-bit RGB565 specification.
-    #define BLACK      0x0000
-    #define RED        0xF800
-    #define LIME       0x07E0   // brighter green
-    #define BLUE       0x001F
-
-    // Clear everything so we start from scratch
     LCD_Clear(BLACK);
 
-    double b1_starting_vel, b2_starting_vel;
-    double b1_angle, b2_angle;
-    int time = 0;
-    int winner = 0;
+    init_role();
+    if (is_leader) enter_start();
+    else           enter_wait();
 
-    // Initialize all bodies in a compact list
-    Body bodies[N_BODIES] = {
-        { .x=120.0f, .y=100.0f, .vx= 1.2f, .vy= 0.5f, .mass=20.0f, .radius = 10, .restitution = 1, .outcolor=RED, .incolor = BLUE  },
-        { .x=180.0f, .y=250.0f, .vx=-0.8f, .vy=-1.0f, .mass=25.0f, .radius = 10, .restitution = 1, .outcolor=LIME, .incolor = RED }
-        // ,{ .x= 60.0f, .y=250.0f, .vx= 0.5f, .vy= 0.9f, .mass=30.0f, .radius = 5, .restitution = 0.9, .color=BLUE }
-    };
-    for(;;){
-    #if !IS_MASTER
-        handle_incoming_as_slave();
-    #endif
+    for (;;) {
+        // Only the follower polls frames here. The leader uses
+        // send_reliable()/request_slave_config(), which read the replies themselves.
+        if (!is_leader) handle_incoming_as_follower();
 
-        // Infinite Animation Loop
+        // NOTE: use `break` only to leave the switch. Never break the for(;;).
+        switch (state) {
 
-        if (mode == START)
-        {
-            sound_init();
-            play_start();
-            sound_wait();
-            LCD_Clear(BLACK);
-            LCD_DrawString(90,150, CYAN, BLACK, "BEYBLADE", 16, 1);;
-#if IS_MASTER
-            chosen = false;
-            have_p2 = false;
-            // printf("%d", send_reliable(CMD_HELLO, NULL, 0));
-            if (send_reliable(CMD_HELLO, NULL, 0)) mode = CHOOSE;
-            else sleep_ms(200);              // slave not up yet, try again
-#endif
+        case GS_WAIT:                         // follower: HELLO handler moves us on
             break;
 
-        }
-
-        if (mode == CHOOSE)
-        {
-            LCD_Clear(BLACK);
-            // LCD_DrawString(40,10, CYAN, BLACK, "Build your Beyblade!", 16, 1);
-#if IS_MASTER
-        {
-            // 1. Master's player picks their own config (slave's player is doing the same)
-            if (!chosen) {
-                p1_config = configbeyblade();
-                chosen = true;
-                // show_waiting();
-            }
-            // 2. Ask the slave for its config until it answers
-            if (!have_p2) {
-                if (!request_slave_config(&p2_config)) { sleep_ms(150); break; }
-                have_p2 = true;
-            }
-            // 3. Give the slave our config, then start
-            uint8_t buf[CONFIG_WIRE_SIZE];
-            pack_config(&p1_config, buf);
-            if (send_reliable(CMD_CONFIG, buf, sizeof(buf)) &&
-                send_reliable(CMD_START, NULL, 0)) {
-                mode = BATTLE;
-            } else {
-                // show_local_error();          // retries next loop
-                sleep_ms(200);
-            }
-        }
-#else
-            // Slave: pick our config once, then wait for the master's requests
-            if (!chosen) {
-                p2_config = configbeyblade();
-                chosen = true;
-                drain_rx();                  // discard polls that arrived while we were busy
-                // show_waiting();
-            }
-#endif
+        case GS_START:                        // leader
+            if (send_reliable(CMD_HELLO, NULL, 0)) enter_choose();
+            else sleep_ms(200);               // follower not up yet
             break;
-            // BeybladeConfig p2_config = configbeyblade();
-            // Body p1 = calcStats(p1_config);
-            // Body p2 = calcStats(p2_config);
-            // winner = determineWinner(p1, p2);
-            // sendData(p1, p2, winner);
-            // mode = BATTLE;
-        }
 
-        while(mode == BATTLE) {
-                // Calculate accelerations and update velocities
-            
-                for (int i = 0; i < N_BODIES; i++) {
-                    // float total_accel_x = 0.0f;
-                    // float total_accel_y = 0.0f;
-
-                    // for (int j = 0; j < N_BODIES; j++) {
-                    //     if (i == j) continue;
-
-                    //     float dx = bodies[j].x - bodies[i].x;
-                    //     float dy = bodies[j].y - bodies[i].y;
-                    //     // d^2 = dx^2 + dy^2 (+ a fake softening factor to avoid collisions)
-                    //     float dist_sq = dx * dx + dy * dy + SOFTENING;
-                    //     // Newton's law of gravitation: F = G * m1 * m2 / d^2
-                    //     float inv_dist_cubed = 1.0f / (dist_sq * sqrtf(dist_sq));
-                        
-                    //     // Acceleration = Force / mass, but we multiply by mass to get the force directly
-                    //     // so we can use it to update velocity directly.
-                    //     total_accel_x += dx * inv_dist_cubed * bodies[j].mass * G;
-                    //     total_accel_y += dy * inv_dist_cubed * bodies[j].mass * G;
-                    // }
-                    // bodies[i].vx += total_accel_x * DT * 100;
-                    // bodies[i].vy += total_accel_y * DT * 100;
-
-                    for (int j = i + 1; j < N_BODIES; j++) {
-                            if (handle_collision(&bodies[i], &bodies[j])) LCD_Clear(BLACK);
-                    }
+        case GS_CHOOSE:
+            if (is_leader) {
+                if (!chosen) {
+                    p1_config = configbeyblade();
+                    chosen = true;
+                    LCD_Clear(BLACK);
+                    LCD_DrawString(30, 150, CYAN, BLACK, "Waiting for opponent", 16, 1);
                 }
-
-                for (int i = 0; i < N_BODIES; i++) {
-                // Apply boundary collision calculations here
-                    if (bodies[i].x - bodies[i].radius < 0) {
-                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                        bodies[i].x = bodies[i].radius;
-                        bodies[i].vx = fabsf(bodies[i].vx) * bodies[i].restitution;
-                    }
-
-                    if (bodies[i].x + bodies[i].radius >= 240) {
-                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                        bodies[i].x = 240 - bodies[i].radius;
-                        bodies[i].vx = -fabsf(bodies[i].vx) * bodies[i].restitution;
-                    }
-
-                    if (bodies[i].y - bodies[i].radius < 0) {
-                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                        bodies[i].y = bodies[i].radius;
-                        bodies[i].vy = fabsf(bodies[i].vy) * bodies[i].restitution;
-                    }
-
-                    if (bodies[i].y + bodies[i].radius >= 320) {
-                        LCD_Circle(bodies[i].x, bodies[i].y, bodies[i].radius, 0, BLACK);
-                        LCD_Circle(bodies[i].x, bodies[i].y, 5, 0, BLACK);
-                        bodies[i].y = 320 - bodies[i].radius;
-                        bodies[i].vy = -fabsf(bodies[i].vx) * bodies[i].restitution;
-                    }
+                if (!have_p2) {
+                    if (!request_slave_config(&p2_config)) { sleep_ms(150); break; }
+                    have_p2 = true;
                 }
-                // Update positions and draw each body
-                for (int i = 0; i < N_BODIES; i++) {
-                    int old_x = (int)bodies[i].x;
-                    int old_y = (int)bodies[i].y;
-                    // new position = old position + velocity * time step
-                    bodies[i].x += bodies[i].vx * DT * 350;
-                    bodies[i].y += bodies[i].vy * DT * 350;
-
-                    // Wrap around screen edges
-                    // if (bodies[i].x < 0)    bodies[i].x += 240;
-                    // if (bodies[i].x >= 240) bodies[i].x -= 240;
-                    // if (bodies[i].y < 0)    bodies[i].y += 320;
-                    // if (bodies[i].y >= 320) bodies[i].y -= 320;
-
-                    // LCD_DrawPoint(old_x, old_y, BLACK);
-                    // LCD_DrawPoint((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].color);
-                    LCD_Circle(old_x, old_y, bodies[i].radius, 0, BLACK);
-                    LCD_Circle(old_x, old_y, 5, 0, BLACK);
-                    LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, bodies[i].radius, 0, bodies[i].outcolor);
-                    LCD_Circle((uint16_t)bodies[i].x, (uint16_t)bodies[i].y, 5, 0, bodies[i].incolor);
+                uint8_t buf[CONFIG_WIRE_SIZE];
+                pack_config(&p1_config, buf);
+                if (send_reliable(CMD_CONFIG, buf, sizeof(buf)) &&
+                    send_reliable(CMD_START, NULL, 0)) {
+                    enter_battle();
+                } else {
+                    sleep_ms(200);            // retry next pass
                 }
-
-                // Slow it WAY down so we can see the planets interact with each other!
-                // sleep_us(0.1);
-                time++;
-                if (time > THRESH) {mode = END;}
-
-        }
-
-        if (mode == END)
-        {
-            LCD_Clear(BLACK);
-            LCD_DrawString(30,150, CYAN, BLACK, "THANK YOU FOR PLAYING", 16, 1);;
-            float p1_angle, p1_speed, p2_angle, p2_speed;
-#if IS_MASTER
-        {
-            int winner = determineWinner(p1_angle, p1_speed, p2_angle, p2_speed , p1_config, p2_config);
-            if (!send_reliable(CMD_WINNER, &winner, 1)) {
-                break;
-            }
-            sleep_ms(3000);                  // or wait for a restart button
-            mode = START;               // HELLO pulls the slave back to Choose
-        }
-#endif
-            if (winner == 1) {
-                LCD_DrawString(90,170, CYAN, BLACK, "Player 1", 16, 1);
-            } else if (winner == 2) {
-                LCD_DrawString(90,170, CYAN, BLACK, "Player 2", 16, 1);
             } else {
-                LCD_DrawString(90,170, CYAN, BLACK, "Tie!", 16, 1);
+                if (!chosen) {
+                    p2_config = configbeyblade();
+                    chosen = true;
+                    drain_rx();               // drop polls that arrived while we were busy
+                    LCD_Clear(BLACK);
+                    LCD_DrawString(30, 150, CYAN, BLACK, "Waiting for opponent", 16, 1);
+                }
             }
+            break;
+
+        case GS_BATTLE:
+            for (int i = 0; i < N_BODIES; i++)
+                for (int j = i + 1; j < N_BODIES; j++)
+                    if (handle_collision(&bodies[i], &bodies[j])) LCD_Clear(BLACK);
+
+            for (int i = 0; i < N_BODIES; i++) {
+                Body *b = &bodies[i];
+                if (b->x - b->radius < 0) {
+                    erase_body(b);
+                    b->x = b->radius;
+                    b->vx = fabsf(b->vx) * b->restitution;
+                }
+                if (b->x + b->radius >= 240) {
+                    erase_body(b);
+                    b->x = 240 - b->radius;
+                    b->vx = -fabsf(b->vx) * b->restitution;
+                }
+                if (b->y - b->radius < 0) {
+                    erase_body(b);
+                    b->y = b->radius;
+                    b->vy = fabsf(b->vy) * b->restitution;
+                }
+                if (b->y + b->radius >= 320) {
+                    erase_body(b);
+                    b->y = 320 - b->radius;
+                    b->vy = -fabsf(b->vy) * b->restitution;   // was vx: bug
+                }
+            }
+
+            for (int i = 0; i < N_BODIES; i++) {
+                Body *b = &bodies[i];
+                int old_x = (int)b->x;
+                int old_y = (int)b->y;
+                b->x += b->vx * DT * 350;
+                b->y += b->vy * DT * 350;
+
+                LCD_Circle(old_x, old_y, b->radius, 0, BLACK);
+                LCD_Circle(old_x, old_y, 5, 0, BLACK);
+                LCD_Circle((uint16_t)b->x, (uint16_t)b->y, b->radius, 0, b->outcolor);
+                LCD_Circle((uint16_t)b->x, (uint16_t)b->y, 5, 0, b->incolor);
+            }
+            // Leader decides when the match ends. Follower stays in the battle
+            // until CMD_WINNER arrives (handled above).
+            if (is_leader && ++frame_count > THRESH) enter_end_leader();
+            break;
+
+        case GS_END:
+            if (is_leader) {
+                winner = determineWinner(.1,.5,.5,.1,p1_config,p2_config);
+                if (!winner_sent) {
+                    if (send_reliable(CMD_WINNER, &winner, 1)) winner_sent = true;
+                    else { sleep_ms(200); break; }
+                }
+                sleep_ms(3000);
+                enter_start();                // HELLO pulls the follower back to CHOOSE
+            }
+            break;
         }
-        #endif
-
-    
-            // Now, for some more fun!
-
-            // Uncomment the ANIMATION #define at the top of main.c 
-            // to run this section.
-            
-            // We've converted a popular GIF into a series of images, 
-            // and stored each of those frames in its own C array.  
-            // Look at the lab for the script we wrote to do this.
-
-            // This is an example of how you can draw a very large picture, 
-            // but notice how slow the animation is, even at 100 MHz.  
-            // The LCD_DrawPicture function is not really intended for such 
-            // large images, but it will be very helpful for smaller ones, 
-            // like scary monsters and nice sprites in a game.
-
-        #ifdef ANIMATION
-        Picture* frame_pic = NULL;
-        int frame_index = 0;
-        while (1) { // Loop forever
-            // Get the next frame from the array
-            frame_pic = load_image(mystery_frames[frame_index]);
-        
-            if (frame_pic) {
-                // Draw the frame to the top-left corner of the screen
-                LCD_DrawPicture(0, 0, frame_pic);
-                
-                // Free the Picture struct (not the pixel data)
-                free_image(frame_pic);
-            }
-        
-            // Move to the next frame, looping back to the start
-            frame_index++;
-            if (frame_index >= mystery_frame_count) {
-                frame_index = 0;
-            }
-        
-            // Add a small delay to control animation speed
-            sleep_ms(1); // Adjust delay as needed
-        }
-    #endif
     }
 }
+
+#else  // ANIMATION
+int main(void) {
+    init_uart();
+    init_uart_irq();
+    init_spi_lcd();
+    LCD_Setup();
+    LCD_Clear(BLACK);
+
+    int frame_index = 0;
+    for (;;) {
+        Picture* frame_pic = load_image(mystery_frames[frame_index]);
+        if (frame_pic) {
+            LCD_DrawPicture(0, 0, frame_pic);
+            free_image(frame_pic);
+        }
+        if (++frame_index >= mystery_frame_count) frame_index = 0;
+        sleep_ms(1);
+    }
+}
+#endif
